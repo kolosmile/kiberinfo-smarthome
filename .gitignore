@@ -3,5 +3,4 @@ dist
 dist-electron
 .vite
 *.log
-release\win-unpacked
-release/
+release/win-unpacked
