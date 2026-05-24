@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1 --port 5173 --strictPort\" \"wait-on tcp:5173 && electron .\"",
     "build": "vite build",
-    "dist": "npm run build; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; electron-builder --win portable",
+    "dist": "npm run build; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; electron-builder --win",
+    "dist:portable": "npm run build; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; electron-builder --win portable",
+    "dist:installer": "npm run build; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; electron-builder --win nsis",
     "preview": "vite preview",
     "start": "electron ."
   },
@@ -46,8 +48,15 @@
     ],
     "win": {
       "target": [
+        "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Okosotthon-Vezerlopult-Setup-${version}.exe"
     },
     "portable": {
       "artifactName": "Okosotthon-Vezerlopult-${version}.exe"

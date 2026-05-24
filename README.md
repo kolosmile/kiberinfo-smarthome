@@ -21,10 +21,21 @@ Windows `.exe` készítése:
 npm run dist
 ```
 
-A kész futtatható állomány ide kerül:
+A parancs két Windows `.exe` fájlt készít:
 
 ```text
+release/Okosotthon-Vezerlopult-Setup-1.0.0.exe
 release/Okosotthon-Vezerlopult-1.0.0.exe
+```
+
+A `Setup` verzió telepítő. Ezt érdemes használni bemutatóhoz, mert a telepített alkalmazás gyorsabban indul.
+
+A `portable` verzió telepítés nélkül fut, de lassabban indulhat, mert minden indításkor ideiglenesen kicsomagolja az Electron alkalmazást.
+
+Fejlesztői gyors teszthez a csomagolás után közvetlenül futtatható ez is:
+
+```text
+release/win-unpacked/Okosotthon Vezerlopult.exe
 ```
 
 ## MQTT

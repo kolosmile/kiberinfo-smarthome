@@ -3,4 +3,5 @@ dist
 dist-electron
 .vite
 *.log
-release/win-unpacked
+release/
+release/Okosotthon-Vezerlopult-1.0.0.exe
