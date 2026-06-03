@@ -81,6 +81,42 @@ Subscribe topic: bme/kiberfizikai/okosotthon/vezerles
 Payload encoding: UTF-8 JSON
 ```
 
+Ha a MaxWhere vagy a teszteléshez használt kliens böngészős/WebSocket alapú MQTT klienst használ, akkor nem a `1883` portot kell megadni. A `1883` csak natív TCP MQTT kapcsolathoz való.
+
+WebSocket klienshez ezt használd:
+
+```text
+Protocol: wss://
+Broker host: test.mosquitto.org
+Port: 8081
+Path: /mqtt
+SSL/TLS: on
+Username: üres
+Password: üres
+Subscribe topic: bme/kiberfizikai/okosotthon/vezerles
+```
+
+Ha a kliens nem HTTPS oldalról fut és engedi a titkosítatlan WebSocketet, ez is működhet:
+
+```text
+Protocol: ws://
+Broker host: test.mosquitto.org
+Port: 8080
+Path: /mqtt
+SSL/TLS: off
+Username: üres
+Password: üres
+Subscribe topic: bme/kiberfizikai/okosotthon/vezerles
+```
+
+Fontos különbség:
+
+| Kliens típusa | Host | Port | SSL/TLS | Path |
+| --- | --- | --- | --- | --- |
+| Natív MQTT TCP | `test.mosquitto.org` | `1883` | off | nincs |
+| MQTT WebSocket | `test.mosquitto.org` | `8080` | off | `/mqtt` |
+| MQTT WebSocket TLS | `test.mosquitto.org` | `8081` | on | `/mqtt` |
+
 ### Eszközazonosítók
 
 | Eszköz | `device` érték | Várt mezők |
