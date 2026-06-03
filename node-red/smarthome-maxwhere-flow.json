@@ -1,0 +1,1104 @@
+[
+  {
+    "id": "smarthome_mqtt_broker",
+    "type": "mqtt-broker",
+    "name": "test.mosquitto.org",
+    "broker": "test.mosquitto.org",
+    "port": "1883",
+    "clientid": "maxwhere_smarthome_bridge",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "smarthome_comment",
+    "type": "comment",
+    "z": "3e20993d.c684a6",
+    "name": "Smarthome MQTT bridge",
+    "info": "Subscribes to bme/kiberfizikai/okosotthon/vezerles and controls Lamp_1, Lamp_2, Fan_1. lamp_3 and lamp_4 are intentionally ignored.",
+    "x": 1180,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "smarthome_fan_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Fan_1 visual",
+      "create": "init",
+      "options": {
+        "id": "Fan_1",
+        "material": "Physics/DebugDraw/Blue",
+        "position": {
+          "x": 750,
+          "y": 220,
+          "z": 320
+        },
+        "scale": {
+          "x": 30,
+          "y": 30,
+          "z": 30
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "wireframe",
+        "wireframeSettings": {
+          "geometry": "Ring",
+          "ringGeometrySettings": {
+            "innerRadius": 3,
+            "outerRadius": 10,
+            "thetaSegments": 12,
+            "phiSegments": 3,
+            "thetaStart": 0,
+            "thetaLength": 6.28
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 720,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_mqtt_in",
+    "type": "mqtt in",
+    "z": "3e20993d.c684a6",
+    "name": "Smarthome control topic",
+    "topic": "bme/kiberfizikai/okosotthon/vezerles",
+    "qos": "0",
+    "datatype": "auto",
+    "broker": "smarthome_mqtt_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 1180,
+    "y": 860,
+    "wires": [
+      [
+        "smarthome_json"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_json",
+    "type": "json",
+    "z": "3e20993d.c684a6",
+    "name": "Parse JSON payload",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 1420,
+    "y": 860,
+    "wires": [
+      [
+        "smarthome_normalize"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_normalize",
+    "type": "function",
+    "z": "3e20993d.c684a6",
+    "name": "Normalize smart home command",
+    "func": "const payload = msg.payload;\nconst rejected = (reason, raw) => {\n    const out = Array(11).fill(null);\n    out[10] = { payload: { accepted: false, reason, raw } };\n    node.status({ fill: 'yellow', shape: 'ring', text: reason });\n    return out;\n};\n\nif (!payload || typeof payload !== 'object' || Array.isArray(payload)) {\n    return rejected('payload is not an object', payload);\n}\n\nconst lampIndex = {\n    lamp_1: 1,\n    lamp_2: 2,\n    lamp_3: 3,\n    lamp_4: 4,\n};\n\nif (!(payload.device in lampIndex) && payload.device !== 'fan_1') {\n    return rejected(`ignored unsupported device: ${payload.device}`, payload);\n}\n\nif (payload.state !== 'on' && payload.state !== 'off') {\n    return rejected(`invalid state: ${payload.state}`, payload);\n}\n\nconst command = {\n    device: payload.device,\n    enabled: payload.state === 'on',\n};\n\nif (payload.device === 'fan_1') {\n    if (!Number.isInteger(payload.speed) || payload.speed < 0 || payload.speed > 100) {\n        return rejected(`invalid fan speed: ${payload.speed}`, payload);\n    }\n    command.type = 'fan';\n    command.target = 'Fan_1';\n    command.speed = payload.speed;\n} else {\n    command.type = 'lamp';\n    command.target = `Lamp_${lampIndex[payload.device]}`;\n}\n\nmsg.payload = command;\nmsg.topic = `${command.device}:${command.enabled ? 'on' : 'off'}`;\nnode.status({ fill: 'green', shape: 'dot', text: msg.topic });\n\nconst out = Array(11).fill(null);\nif (command.type === 'lamp') {\n    const base = (lampIndex[command.device] - 1) * 2;\n    out[base + (command.enabled ? 0 : 1)] = msg;\n} else {\n    out[8] = msg;\n}\nout[9] = { payload: command };\nreturn out;",
+    "outputs": 11,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1680,
+    "y": 860,
+    "wires": [
+      [
+        "smarthome_lamp1_show_on",
+        "smarthome_lamp1_hide_off"
+      ],
+      [
+        "smarthome_lamp1_hide_on",
+        "smarthome_lamp1_show_off"
+      ],
+      [
+        "smarthome_lamp2_show_on",
+        "smarthome_lamp2_hide_off"
+      ],
+      [
+        "smarthome_lamp2_hide_on",
+        "smarthome_lamp2_show_off"
+      ],
+      [
+        "smarthome_lamp3_show_on",
+        "smarthome_lamp3_hide_off"
+      ],
+      [
+        "smarthome_lamp3_hide_on",
+        "smarthome_lamp3_show_off"
+      ],
+      [
+        "smarthome_lamp4_show_on",
+        "smarthome_lamp4_hide_off"
+      ],
+      [
+        "smarthome_lamp4_hide_on",
+        "smarthome_lamp4_show_off"
+      ],
+      [
+        "smarthome_fan_animator"
+      ],
+      [
+        "smarthome_debug_accepted"
+      ],
+      [
+        "smarthome_debug_rejected"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_fan_animator",
+    "type": "function",
+    "z": "3e20993d.c684a6",
+    "name": "Fan speed to rotation",
+    "func": "const command = msg.payload;\nlet timer = context.get('timer');\nif (timer) {\n    clearInterval(timer);\n    context.set('timer', null);\n}\n\nlet angle = context.get('angle') || 0;\n\nfunction sendOrientation(currentAngle) {\n    const half = currentAngle / 2;\n    node.send({\n        payload: {\n            subject: 'Fan_1',\n            data: {\n                msg: 'fan axial rotation',\n                value: {\n                    x: 0,\n                    y: 0,\n                    z: Math.sin(half),\n                    w: Math.cos(half),\n                },\n            },\n        },\n    });\n}\n\nif (!command.enabled || command.speed <= 0) {\n    context.set('angle', angle);\n    node.status({ fill: 'grey', shape: 'ring', text: 'fan off' });\n    sendOrientation(angle);\n    return null;\n}\n\n// Keep the visual range low enough to avoid aliasing/reverse-spin illusion.\n// At 25 Hz this maps 1..100% roughly to 0.28..1.5 rad/s.\nconst step = 0.01 + (command.speed / 100) * 0.05;\ntimer = setInterval(() => {\n    angle = (angle + step) % (Math.PI * 2);\n    context.set('angle', angle);\n    sendOrientation(angle);\n}, 40);\n\ncontext.set('timer', timer);\nnode.status({ fill: 'blue', shape: 'dot', text: `fan ${command.speed}%` });\nreturn null;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "const timer = context.get('timer');\nif (timer) clearInterval(timer);",
+    "libs": [],
+    "x": 1980,
+    "y": 780,
+    "wires": [
+      [
+        "smarthome_fan_orientation"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_fan_orientation",
+    "type": "set-orientation",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Use node from input",
+      "mode": "fromInput",
+      "oriType": "quaternion",
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Apply Fan_1 rotation"
+    },
+    "x": 2240,
+    "y": 780,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_debug_accepted",
+    "type": "debug",
+    "z": "3e20993d.c684a6",
+    "name": "last accepted command",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1980,
+    "y": 920,
+    "wires": []
+  },
+  {
+    "id": "smarthome_debug_rejected",
+    "type": "debug",
+    "z": "3e20993d.c684a6",
+    "name": "rejected or ignored payload",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1980,
+    "y": 960,
+    "wires": []
+  },
+  {
+    "id": "smarthome_debug_applied",
+    "type": "debug",
+    "z": "3e20993d.c684a6",
+    "name": "MaxWhere applied command",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 2500,
+    "y": 620,
+    "wires": []
+  },
+  {
+    "id": "smarthome_catch_json",
+    "type": "catch",
+    "z": "3e20993d.c684a6",
+    "name": "JSON parse errors",
+    "scope": [
+      "smarthome_json"
+    ],
+    "uncaught": false,
+    "x": 1420,
+    "y": 940,
+    "wires": [
+      [
+        "smarthome_debug_parse_error"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_debug_parse_error",
+    "type": "debug",
+    "z": "3e20993d.c684a6",
+    "name": "malformed JSON payload",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "error.message",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1680,
+    "y": 940,
+    "wires": []
+  },
+  {
+    "id": "smarthome_mqtt_status",
+    "type": "status",
+    "z": "3e20993d.c684a6",
+    "name": "MQTT subscription status",
+    "scope": [
+      "smarthome_mqtt_in"
+    ],
+    "x": 1180,
+    "y": 940,
+    "wires": [
+      [
+        "smarthome_debug_mqtt_status"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_debug_mqtt_status",
+    "type": "debug",
+    "z": "3e20993d.c684a6",
+    "name": "MQTT connected/subscribed state",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "status",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1420,
+    "y": 1020,
+    "wires": []
+  },
+  {
+    "id": "smarthome_lamp1_grey_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_1_Grey visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_1_Grey",
+        "material": "Physics/DebugDraw/Grey",
+        "position": {
+          "x": -1400,
+          "y": 220,
+          "z": 320
+        },
+        "scale": {
+          "x": 18,
+          "y": 18,
+          "z": 18
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 240,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp1_color_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_1_Yellow visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_1_Yellow",
+        "material": "Physics/DebugDraw/Yellow",
+        "position": {
+          "x": -1400,
+          "y": 221,
+          "z": 320
+        },
+        "scale": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 280,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp1_show_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_1_Yellow",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_1 show yellow"
+    },
+    "x": 1980,
+    "y": 380,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp1_hide_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_1_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_1 hide grey"
+    },
+    "x": 2240,
+    "y": 380,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp1_hide_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_1_Yellow",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_1 hide yellow"
+    },
+    "x": 1980,
+    "y": 420,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp1_show_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_1_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_1 show grey"
+    },
+    "x": 2240,
+    "y": 420,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp2_grey_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_2_Grey visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_2_Grey",
+        "material": "Physics/DebugDraw/Grey",
+        "position": {
+          "x": -900,
+          "y": 220,
+          "z": 320
+        },
+        "scale": {
+          "x": 18,
+          "y": 18,
+          "z": 18
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 360,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp2_color_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_2_Red visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_2_Red",
+        "material": "Physics/DebugDraw/Red",
+        "position": {
+          "x": -900,
+          "y": 221,
+          "z": 320
+        },
+        "scale": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 400,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp2_show_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_2_Red",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_2 show red"
+    },
+    "x": 1980,
+    "y": 460,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp2_hide_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_2_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_2 hide grey"
+    },
+    "x": 2240,
+    "y": 460,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp2_hide_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_2_Red",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_2 hide red"
+    },
+    "x": 1980,
+    "y": 500,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp2_show_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_2_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_2 show grey"
+    },
+    "x": 2240,
+    "y": 500,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp3_grey_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_3_Grey visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_3_Grey",
+        "material": "Physics/DebugDraw/Grey",
+        "position": {
+          "x": -400,
+          "y": 220,
+          "z": 320
+        },
+        "scale": {
+          "x": 18,
+          "y": 18,
+          "z": 18
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 480,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp3_color_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_3_Green visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_3_Green",
+        "material": "Physics/DebugDraw/Green",
+        "position": {
+          "x": -400,
+          "y": 221,
+          "z": 320
+        },
+        "scale": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 520,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp3_show_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_3_Green",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_3 show green"
+    },
+    "x": 1980,
+    "y": 540,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp3_hide_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_3_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_3 hide grey"
+    },
+    "x": 2240,
+    "y": 540,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp3_hide_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_3_Green",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_3 hide green"
+    },
+    "x": 1980,
+    "y": 580,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp3_show_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_3_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_3 show grey"
+    },
+    "x": 2240,
+    "y": 580,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp4_grey_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_4_Grey visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_4_Grey",
+        "material": "Physics/DebugDraw/Grey",
+        "position": {
+          "x": 100,
+          "y": 220,
+          "z": 320
+        },
+        "scale": {
+          "x": 18,
+          "y": 18,
+          "z": 18
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 600,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp4_color_visual",
+    "type": "add-manual-visual",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "displayName": "Lamp_4_Blue visual",
+      "create": "init",
+      "options": {
+        "id": "Lamp_4_Blue",
+        "material": "Physics/DebugDraw/Blue",
+        "position": {
+          "x": 100,
+          "y": 221,
+          "z": 320
+        },
+        "scale": {
+          "x": 0.01,
+          "y": 0.01,
+          "z": 0.01
+        },
+        "orientation": {
+          "w": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "usePhysicalShape": false,
+        "physicalShapeType": "boundingbox",
+        "raycast": true,
+        "visualType": "faces",
+        "faceSettings": {
+          "geometry": "Circle",
+          "circleGeometrySettings": {
+            "radius": 8,
+            "thetaStart": 0,
+            "thetaLength": 6.283,
+            "segments": 48
+          }
+        }
+      }
+    },
+    "x": 1180,
+    "y": 640,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "smarthome_lamp4_show_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_4_Blue",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_4 show blue"
+    },
+    "x": 1980,
+    "y": 620,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp4_hide_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_4_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_4 hide grey"
+    },
+    "x": 2240,
+    "y": 620,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp4_hide_on",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_4_Blue",
+      "mode": "local",
+      "scale": {
+        "x": 0.01,
+        "y": 0.01,
+        "z": 0.01
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_4 hide blue"
+    },
+    "x": 1980,
+    "y": 660,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  },
+  {
+    "id": "smarthome_lamp4_show_off",
+    "type": "set-scale",
+    "z": "3e20993d.c684a6",
+    "settings": {
+      "nodeid": "Lamp_4_Grey",
+      "mode": "local",
+      "scale": {
+        "x": 18,
+        "y": 18,
+        "z": 18
+      },
+      "reference": "absolute",
+      "space": "parent",
+      "displayName": "Lamp_4 show grey"
+    },
+    "x": 2240,
+    "y": 660,
+    "wires": [
+      [
+        "smarthome_debug_applied"
+      ]
+    ]
+  }
+]
